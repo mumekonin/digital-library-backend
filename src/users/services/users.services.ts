@@ -7,12 +7,18 @@ import * as bcrypt from 'bcrypt';
 import { UserResponse } from "../responses/users.respnses";
 import { commonUtils } from "src/commons/utils";
 import { ReportsService } from "src/reporting/service/reports.service";
+import { randomBytes } from "crypto";
+import { MailerService } from "@nestjs-modules/mailer";
+import { ConfigService } from "@nestjs/config";
+
 @Injectable()
 export class UserService {
   constructor(
     @InjectModel(UsersSchema.name)
     private readonly userModule: Model<UsersSchema>,
     private readonly reportService: ReportsService,
+    private readonly mailerService: MailerService,
+    private readonly configService: ConfigService
   ) { }
   //create user account
   async createUserAccount(usersDto: UsersDto) {
@@ -331,5 +337,75 @@ export class UserService {
     const action = "user logged out";
     await this.reportService.registorReports(userID, action);
     return { message: 'user logged out successfully' };
+  }
+async forgotPassword(email: string) {
+    const user = await this.userModule.findOne({
+      email: email.toLowerCase(),
+    });
+
+    if (!user) {
+      return { message: 'If that email exists, a reset link has been sent.' };
+    }
+
+    const token  = randomBytes(32).toString('hex');
+    const expiry = new Date(Date.now() + 60 * 60 * 1000);
+
+    await this.userModule.findByIdAndUpdate(user._id, {
+      resetToken:       token,
+      resetTokenExpiry: expiry,
+    });
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+    const resetUrl    = `${frontendUrl}/reset-password.html?token=${token}`;
+
+    await this.mailerService.sendMail({
+      to:      user.email,
+      subject: 'E-Library — Reset Your Password',
+      html: `
+        <div style="font-family:sans-serif;max-width:520px;margin:auto;padding:20px">
+          <h2 style="color:#0d1321">Reset Your Password</h2>
+          <p>Click the button below to reset your password.
+             This link expires in <strong>1 hour</strong>.</p>
+          <a href="${resetUrl}"
+             style="display:inline-block;background:#c9a84c;color:#0d1321;
+                    padding:13px 30px;border-radius:6px;text-decoration:none;
+                    font-weight:700;margin:20px 0">
+            Reset Password
+          </a>
+          <p style="color:#999;font-size:0.85rem">
+            If you did not request this, you can safely ignore this email.
+          </p>
+        </div>
+      `,
+    });
+
+    const action = 'requested password reset';
+    await this.reportService.registorReports(user._id.toString(), action);
+
+    return { message: 'If that email exists, a reset link has been sent.' };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const user = await this.userModule.findOne({
+      resetToken:       token,
+      resetTokenExpiry: { $gt: new Date() },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+
+    await this.userModule.findByIdAndUpdate(user._id, {
+      password:         hashed,
+      resetToken:       null,
+      resetTokenExpiry: null,
+    });
+
+    const action = 'password reset successfully';
+    await this.reportService.registorReports(user._id.toString(), action);
+
+    return { message: 'Password reset successfully. You can now log in.' };
   }
 }

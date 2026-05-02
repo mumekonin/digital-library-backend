@@ -1,10 +1,10 @@
 export class BookResponse {
-  id: string;
-  title: string;
-  author: string;
-  description: string;
+  id!: string;
+  title!: string;
+  author!: string;
+  description!: string;
   filetype?: string;
-  category: string;
+  category!: string;
   createdAt?: Date;
   updatedAt?: Date;
   sendFile?: string;
@@ -14,8 +14,8 @@ export class BookResponse {
   coverType?: string;
 }
 export class CategoryResponse {
-  id: string
-  name: string;
-  description: string
+  id!: string
+  name!: string;
+  description!: string
   updatedAt?: Date;
 }

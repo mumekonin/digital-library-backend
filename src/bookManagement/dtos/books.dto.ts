@@ -4,17 +4,17 @@ import { IsOptional, IsString } from "class-validator";
 export class CreateBookDto {
   @IsString()
   @Type(() => String)
-  title: string;
+  title!: string;
   @IsString()
-  author: string;
+  author!: string;
   @IsString()
-  description: string;
+  description!: string;
   @IsString()
-  category: string;
+  category!: string;
 }
 export class CreateCategoryDto{
   @IsString()
-  name:string;
+  name!:string;
   @IsOptional()
   @IsString()
   description?:string;

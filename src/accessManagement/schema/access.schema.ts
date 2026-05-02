@@ -3,37 +3,48 @@ import { Types } from 'mongoose';
 @Schema({ timestamps: true })
 export class BookCatalog {
   @Prop({ required: true })
-  title: string;
+  title!: string;
   @Prop({ required: true })
-  author: string;
+  author!: string;
   @Prop()
-  category: string;
+  category!: string;
   @Prop({ required: true })
-  floorNumber: number;
+  floorNumber!: number;
   @Prop({ required: true })
-  section: string;
+  section!: string;
   @Prop({ required: true })
-  shelfNumber: string;
+  shelfNumber!: string;
  @Prop({ required: true })
-  totalCopies: number;
+  totalCopies!: number;
   @Prop({ required: true, min: 0 })
-  availableCopies: number;
+  availableCopies!: number;
   @Prop()
-  borrowUrl: string;
+  borrowUrl!: string;
 }
 export const bookCatalogSchema = SchemaFactory.createForClass(BookCatalog);
 @Schema({ timestamps: true })
 export class Borrow {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  userId: Types.ObjectId;
-  @Prop({ type: Types.ObjectId, ref: 'BookCatalog', required: true })
-  bookCatalogId: Types.ObjectId;
-  @Prop({ default: false })
-  returned: boolean;
-  @Prop()
-  borrowDate: Date;
-  @Prop()
-  returnDate: Date;  
+  userId!: Types.ObjectId;
 
-}  
-export const borrowSchema = SchemaFactory.createForClass(Borrow);  
+  @Prop({ type: Types.ObjectId, ref: 'BookCatalog', required: true })
+  bookCatalogId!: Types.ObjectId;
+
+  @Prop({ default: false })
+  returned!: boolean;
+
+  @Prop()
+  borrowDate!: Date;
+
+  @Prop()
+  returnDate!: Date;                  
+  @Prop({ default: null })
+  actualReturnDate!: Date;             
+  @Prop({
+    type: String,
+    enum: ['borrowed', 'return_requested', 'returned'],
+    default: 'borrowed'
+  })
+  status!: string;                  
+}
+export const borrowSchema = SchemaFactory.createForClass(Borrow); 

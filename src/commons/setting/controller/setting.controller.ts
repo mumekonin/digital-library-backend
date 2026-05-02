@@ -1,52 +1,88 @@
-import { Controller, Post, Get, UseInterceptors, UploadedFile, BadRequestException, Body } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import {
+  Controller, Post, Get,
+  UseInterceptors, UploadedFiles,
+  BadRequestException,
+} from '@nestjs/common';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { SettingService } from '../service/setting.service';
+import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 
 @Controller('settings')
 export class SettingsController {
-  constructor(private readonly settingsService: SettingService) {}
+  constructor(
+    private readonly settingsService: SettingService,
+    private readonly cloudinaryService: CloudinaryService,
+  ) {}
 
-  // 1. Get all settings (for frontend to find logo and welcome video)
   @Get()
-  async getSettings() {
+  getSettings() {
     return this.settingsService.getSettings();
   }
 
-  // 2. Set Welcome Video Path (Manual - No Upload)
-  @Post('set-video-path')
-  async setVideoPath(@Body('path') path: string) {
-    if (!path) {
-      throw new BadRequestException('Path string is required');
-    }
-    // Updates DB so frontend knows where to look for the video
-    return this.settingsService.updateWelcomeVideoPath(path);
-  }
+  @Post('upload')
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'logo',  maxCount: 1 },
+        { name: 'video', maxCount: 1 },
+      ],
+      {
+        storage: memoryStorage(),
+        fileFilter: (req, file, cb) => {
+          const imageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
+          const videoTypes = ['video/mp4', 'video/webm', 'video/ogg'];
 
-  // 3. Upload Logo (Automatic - Handles file and DB)
-  @Post('upload-logo')
-  @UseInterceptors(FileInterceptor('logo', {
-    storage: diskStorage({
-      destination: './uploads/system',
-      filename: (req, file, cb) => {
-        // Use a timestamp to avoid browser caching issues
-        const filename = `logo-${Date.now()}${extname(file.originalname)}`;
-        cb(null, filename); 
+          if (file.fieldname === 'logo' && imageTypes.includes(file.mimetype)) {
+            cb(null, true);
+          } else if (file.fieldname === 'video' && videoTypes.includes(file.mimetype)) {
+            cb(null, true);
+          } else {
+            cb(
+              new BadRequestException(
+                file.fieldname === 'logo'
+                  ? 'Logo must be JPEG, PNG, WebP or SVG'
+                  : 'Video must be MP4, WebM or OGG',
+              ),
+              false,
+            );
+          }
+        },
+        limits: {
+          fileSize: 100 * 1024 * 1024, // 100MB covers both logo and video
+        },
       },
-    }),
-  }))
-  async setLogo(@UploadedFile() file: Express.Multer.File) {
-    if (!file) throw new BadRequestException('No file uploaded');
+    ),
+  )
+  async uploadAssets(
+    @UploadedFiles() files: {
+      logo?:  Express.Multer.File[];
+      video?: Express.Multer.File[];
+    },
+  ) {
+    if (!files?.logo && !files?.video) {
+      throw new BadRequestException('Send at least a logo or video file');
+    }
 
-    const logoPath = `/uploads/system/${file.filename}`;
-    
-    // IMPORTANT: You MUST update the database here
-    await this.settingsService.updateSettings({ logoUrl: logoPath });
+    const updates: { logoUrl?: string; welcomeVideoUrl?: string } = {};
 
-    return { 
-      message: "Logo updated successfully",
-      path: logoPath 
+    if (files.logo?.[0]) {
+      updates.logoUrl = await this.cloudinaryService.uploadImage(
+        files.logo[0], 'system/logos',
+      );
+    }
+
+    if (files.video?.[0]) {
+      updates.welcomeVideoUrl = await this.cloudinaryService.uploadVideo(
+        files.video[0], 'system/videos',
+      );
+    }
+
+    await this.settingsService.updateSettings(updates);
+
+    return {
+      message: 'Settings updated successfully',
+      ...updates,
     };
   }
 }

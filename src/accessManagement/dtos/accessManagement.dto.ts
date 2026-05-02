@@ -2,17 +2,17 @@ import { IsBoolean, IsNumber, IsString } from "class-validator";
 
 export class BookCatalogDto {
     @IsString()
-    title: string;
+    title!: string;
     @IsString()
-    author: string;
+    author!: string;
     @IsString()
-    category: string;
+    category!: string;
     @IsNumber()
-    floorNumber: number;
+    floorNumber!: number;
     @IsString()
-    section: string
+    section!: string
     @IsString()
-    shelfNumber: string;
+    shelfNumber!: string;
     @IsNumber()
-    totalCopies: number;
+    totalCopies!: number;
 } 

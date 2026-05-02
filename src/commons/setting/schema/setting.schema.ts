@@ -1,14 +1,18 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+
 @Schema()
 export class SettingsSchema {
   @Prop({ default: 'E-Library' })
-  siteName: string;
-   @Prop({ unique: true, default: 'system_config' }) // Add this line
-  slug: string;
-  @Prop({ default: '/uploads/system/logo.png' })
-  logoUrl: string;
+  siteName!: string;
 
-  @Prop({ default: '/uploads/videos/welcome-bg.mp4' })
-  welcomeVideoUrl: string;
+  @Prop({ unique: true, default: 'system_config' })
+  slug!: string;
+
+  @Prop({ default: null })
+  logoUrl!: string;
+
+  @Prop({ default: null })
+  welcomeVideoUrl!: string;
 }
+
 export const settingsSchema = SchemaFactory.createForClass(SettingsSchema);

@@ -3,31 +3,31 @@ import { IsAlpha, IsEmail, IsNotEmpty, IsOptional, isString, IsString, MaxLength
 export class UsersDto {
     @IsString()
     @IsAlpha()
-    firstName: string;
+    firstName!: string;
     @IsString()
     @IsAlpha()
-    lastName: string;
+    lastName!: string;
     @IsNotEmpty()
     @IsString()
-    username: string;
+    username!: string;
     @IsNotEmpty()
     @IsEmail()
-    email: string;
+    email!: string;
     @IsNotEmpty()
     @IsString()
     @MinLength(4)
     @MaxLength(8)
-    password: string
+    password!: string
 }
 
 export class LoginDto {
     @IsNotEmpty()
     @IsString()
-    username: string;
+    username!: string;
 
     @IsNotEmpty()
     @IsString()
-    password: string
+    password!: string
 }
 export class UpdateUserProfileDto{
     @IsString()
@@ -58,4 +58,12 @@ export class ChangePasswordDto{
     @MinLength(4)
     @MaxLength(8)
     confirmPassword?: string
+}
+export class ForgotPasswordDto {
+  email!: string;
+}
+
+export class ResetPasswordDto {
+  token!:    string;
+  password!: string;
 }

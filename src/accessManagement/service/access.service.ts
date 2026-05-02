@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { BookCatalog, Borrow, borrowSchema } from "../schema/access.schema";
 import { Model } from "mongoose";
@@ -48,7 +48,6 @@ export class BookCatalogService {
   }
   //search book by title or author
   async searchBook(key: string): Promise<BookCatalog[]> {
-    // ✅ Validation: key must exist and be a non-empty string
     if (!key || typeof key !== 'string' || key.trim().length === 0) {
       throw new BadRequestException('Search key must be a non-empty string');
     }
@@ -57,6 +56,7 @@ export class BookCatalogService {
       $or: [
         { title: { $regex: key, $options: 'i' } },
         { author: { $regex: key, $options: 'i' } },
+        { category: { $regex: key, $options: 'i' } },
         { originalFileName: { $regex: key, $options: 'i' } },
       ],
     });
@@ -79,92 +79,142 @@ export class BookCatalogService {
     });
     return booksResponse;
   }
+  //borrow book
   async borrowBook(currentUser, bookCatalogId: string, returnDate?: Date) {
-    //check is the role is student
     const user = await this.userModel.findById(currentUser.userId);
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+    if (!user) throw new NotFoundException('User not found');
     if (user.role !== 'student') {
       throw new BadRequestException('Only students can borrow books');
     }
-    //check if the book exists
+
     const book = await this.bookCatalogModel.findById(bookCatalogId);
-    if (!book) {
-      throw new NotFoundException('Book not found');
-    }
+    if (!book) throw new NotFoundException('Book not found');
     if (book.availableCopies < 1) {
       throw new BadRequestException('No available copies to borrow');
     }
     if (!returnDate) {
       throw new BadRequestException('Return date is required');
     }
-    if (isNaN(returnDate.getTime())) {
-      throw new BadRequestException('Invalid return date format');
-    }
-    //create a borrow record
+
     const newBorrow = new this.borrowModel({
       userId: currentUser.userId,
       bookCatalogId: bookCatalogId,
-      borrowDate: new Date().toISOString().split('T')[0],
-      returnDate: returnDate
+      borrowDate: new Date(),
+      returnDate: returnDate,
+      status: 'borrowed',
+      returned: false,
+      actualReturnDate: null
     });
     await newBorrow.save();
-    //decrement available copies
+
     book.availableCopies -= 1;
     await book.save();
-    const borrowResponse: BorrowResponse = {
-      firstName: user.firstName,
-      lastName: user.lastName,
-      bookTitle: book.title,
-      borrowDate: newBorrow.borrowDate,
-      returnDate: newBorrow.returnDate
-    }
-    const userId = currentUser.userId;
-    const bookId = bookCatalogId;
-    const action = "book is borrewed";
 
-    //calling borrow report function
-    await this.reportService.registorBorrowAndReturnRports(userId, bookId, action);
+    await this.reportService.registorBorrowAndReturnRports(
+      currentUser.userId,
+      bookCatalogId,
+      'book is borrowed'
+    );
 
     return {
       message: 'Book borrowed successfully',
-      borrowDetails: borrowResponse
+      borrowDetails: {
+        firstName: user.firstName,
+        lastName: user.lastName,
+        bookTitle: book.title,
+        borrowDate: newBorrow.borrowDate,
+        returnDate: newBorrow.returnDate,
+        status: newBorrow.status
+      }
     };
   }
-  async returnBook(currentUser, borrowId: string) {
-    //check if the borrow record exists
-    const borrowRecord = await this.borrowModel.findById(borrowId.toString());
-    if (!borrowRecord) {
-      throw new NotFoundException('Borrow record not found');
-    }
-    //check if the borrow record belongs to the current user
+  //request to return
+  async requestReturn(currentUser, borrowId: string) {
+    const borrowRecord = await this.borrowModel.findById(borrowId);
+    if (!borrowRecord) throw new NotFoundException('Borrow record not found');
+
+    // Must belong to the student
     if (borrowRecord.userId.toString() !== currentUser.userId) {
-      throw new BadRequestException('You can only return your own borrowed books');
+      throw new ForbiddenException('You can only return your own borrowed books');
     }
-    //delete borrow record
-    const deletedBorrow = await this.borrowModel.findByIdAndDelete(borrowId);
-    if (!deletedBorrow) {
-      throw new BadRequestException('Failed to return the book');
+
+    // Must be currently borrowed
+    if (borrowRecord.status !== 'borrowed') {
+      throw new BadRequestException(
+        `Cannot request return — current status is: ${borrowRecord.status}`
+      );
     }
-    //increment available copies
-    const book = await this.bookCatalogModel.findById(deletedBorrow.bookCatalogId);
-    if (book) {
-      book.availableCopies += 1;
-      await book.save();
-    }
-    const userId = currentUser.userId;
-    const bookId = deletedBorrow.bookCatalogId;
-    const action = "book is returend";
-    //calling borrow report function
-    await this.reportService.registorBorrowAndReturnRports(userId, bookId, action);
+
+    borrowRecord.status = 'return_requested';
+    await borrowRecord.save();
+
     return {
-      message: 'Book returned successfully'
+      message: 'Return request submitted. Please bring the book to the library.',
+      status: borrowRecord.status
     };
   }
-  async findActiveBorrowsByUser(userId: string) {
-    return this.borrowModel.find({ userId })
-      .populate('bookCatalogId') // This pulls in the Book details
+
+  // findPendingReturns
+  async findPendingReturns() {
+    return this.borrowModel
+      .find({ status: 'return_requested' })
+      .populate('bookCatalogId')
+      .populate({ path: 'userId', model: 'UsersSchema', select: 'firstName lastName email' })
       .exec();
+  }
+
+  // findAllActiveLoans
+  async findAllActiveLoans() {
+    return this.borrowModel
+      .find({ status: { $in: ['borrowed', 'return_requested'] } })
+      .populate('bookCatalogId')
+      .populate({ path: 'userId', model: 'UsersSchema', select: 'firstName lastName email' })
+      .exec();
+  }
+
+  // findActiveBorrowsByUser
+  async findActiveBorrowsByUser(userId: string) {
+    return this.borrowModel
+      .find({ userId, status: { $in: ['borrowed', 'return_requested'] } })
+      .populate('bookCatalogId')
+      .exec();
+  }
+
+  //  APPROVE RETURN
+  async approveReturn(currentUser, borrowId: string) {
+    if (currentUser.role !== 'librarian') {
+      throw new ForbiddenException('Only librarians can approve returns');
+    }
+
+    const borrowRecord = await this.borrowModel.findById(borrowId);
+    if (!borrowRecord) throw new NotFoundException('Borrow record not found');
+
+    // Must be in return_requested state
+    if (borrowRecord.status !== 'return_requested') {
+      throw new BadRequestException(
+        `Cannot approve — current status is: ${borrowRecord.status}`
+      );
+    }
+    borrowRecord.status = 'returned';
+    borrowRecord.returned = true;
+    borrowRecord.actualReturnDate = new Date();
+    await borrowRecord.save();
+    const book = await this.bookCatalogModel.findById(borrowRecord.bookCatalogId);
+    if (!book) throw new NotFoundException('Book not found');
+    book.availableCopies += 1;
+    await book.save();
+    await this.reportService.registorBorrowAndReturnRports(
+      borrowRecord.userId.toString(),
+      borrowRecord.bookCatalogId,
+      'book is returned'
+    );
+    return {
+      message: 'Return approved successfully',
+      returnDetails: {
+        borrowId: borrowRecord._id,
+        actualReturnDate: borrowRecord.actualReturnDate,
+        status: borrowRecord.status
+      }
+    };
   }
 }

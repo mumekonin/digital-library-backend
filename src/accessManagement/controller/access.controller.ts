@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Query, Req } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req } from "@nestjs/common";
 import { BookCatalogService } from "../service/access.service";
 import { BookCatalogDto } from "../dtos/accessManagement.dto";
 import { JwtAuthGuard } from "src/commons/guards/jwtauth.gourd";
@@ -8,6 +8,7 @@ export class BookCatalogController {
   constructor(
     private readonly bookCatalogService: BookCatalogService
   ) { }
+  //create catalog
   @JwtAuthGuard()
   @Post('create-catalog')
   async createBookCatalog(@Body() bookCatalogDto: BookCatalogDto, @Req() req: any) {
@@ -21,33 +22,56 @@ export class BookCatalogController {
     const books = await this.bookCatalogService.searchBook(key.trim());
     return books;
   }
-  //borrow book
+  // Student borrows a book
   @JwtAuthGuard()
   @Post('borrow-book/:bookCatalogId')
-  async borrowBook(@Req() req: any, @Param('bookCatalogId') bookCatalogId: string, @Body('returnDate') returnDate?: string) {
+  async borrowBook(
+    @Req() req: any,
+    @Param('bookCatalogId') bookCatalogId: string,
+    @Body('returnDate') returnDate?: string
+  ) {
     let expectedReturnDate: Date | undefined;
-
     if (returnDate) {
       expectedReturnDate = new Date(returnDate);
       if (isNaN(expectedReturnDate.getTime())) {
         throw new BadRequestException('Invalid return date format');
       }
     }
-    const currentUser = req.user;
-    const result = await this.bookCatalogService.borrowBook(currentUser, bookCatalogId, expectedReturnDate);
-    return result;
+    return this.bookCatalogService.borrowBook(req.user, bookCatalogId, expectedReturnDate);
   }
+
+  // Student requests a return
   @JwtAuthGuard()
-  @Post('return-book/:borrowId')
-  async returnBook(@Req() req: any, @Param('borrowId') borrowId: string) {
-    const currentUser = req.user;
-    const result = await this.bookCatalogService.returnBook(currentUser, borrowId);
-    return result;
+  @Patch('request-return/:borrowId')
+  async requestReturn(@Req() req: any, @Param('borrowId') borrowId: string) {
+    return this.bookCatalogService.requestReturn(req.user, borrowId);
   }
+
+  // Librarian approves the return
+  @JwtAuthGuard()
+  @Patch('approve-return/:borrowId')
+  async approveReturn(@Req() req: any, @Param('borrowId') borrowId: string) {
+    return this.bookCatalogService.approveReturn(req.user, borrowId);
+  }
+
+  // Student sees their active loans
+  @JwtAuthGuard()
   @Get('my-active-loans')
-  @JwtAuthGuard()
   async getMyLoans(@Req() req: any) {
-    const userId = req.user.userId;
-    return this.bookCatalogService.findActiveBorrowsByUser(userId);
+    return this.bookCatalogService.findActiveBorrowsByUser(req.user.userId);
+  }
+
+  // Librarian sees all pending return requests
+  @JwtAuthGuard()
+  @Get('pending-returns')
+  async getPendingReturns() {
+    return this.bookCatalogService.findPendingReturns();
+  }
+
+  // Librarian sees all active loans
+  @JwtAuthGuard()
+  @Get('all-active-loans')
+  async getAllLoans() {
+    return this.bookCatalogService.findAllActiveLoans();
   }
 }

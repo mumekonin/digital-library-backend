@@ -5,53 +5,58 @@ import { CreateBookDto, CreateCategoryDto, updateBookDto } from "../dtos/books.d
 import { BookResponse, CategoryResponse } from "../responses/books.response";
 import { InjectModel } from "@nestjs/mongoose";
 import { commonUtils } from "src/commons/utils";
-import * as fs from 'fs';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryService } from "src/cloudinary/cloudinary.service";
+
 @Injectable()
 export class BooksService {
   constructor(
     @InjectModel(BooksSchema.name)
     private readonly booksModel: Model<BooksSchema>,
     @InjectModel(CategorySchema.name)
-    private readonly categoryModel:Model<CategorySchema>
-    //private readonly commonUtiles:commonUtils
+    private readonly categoryModel: Model<CategorySchema>
+    , private readonly cloudinaryService: CloudinaryService
   ) { }
-// books.service.ts
-async createBook(createBookDto: CreateBookDto, bookFile: Express.Multer.File, coverFile?: Express.Multer.File) {
-  
-  // Normalize paths: replace backslashes with forward slashes
-  const normalizedFilePath = bookFile?.path ? bookFile.path.replace(/\\/g, '/') : null;
-  
-  // Adding the leading slash ensures the browser treats it as a root-relative path
-  const normalizedCoverPath = coverFile?.path ? `/${coverFile.path.replace(/\\/g, '/')}` : null;
+  async createBook(
+    createBookDto: CreateBookDto,
+    bookFile: Express.Multer.File,
+    coverFile?: Express.Multer.File,
+  ) {
+    const [filePath, coverPath] = await Promise.all([
+      this.cloudinaryService.uploadFile(bookFile, 'books'),
+      coverFile
+        ? this.cloudinaryService.uploadImage(coverFile, 'covers')
+        : Promise.resolve(null),
+    ]);
 
-  const newBook = new this.booksModel({ 
-    ...createBookDto,
-    category: createBookDto.category,
-    filePath: normalizedFilePath,
-    fileType: bookFile.mimetype,
-    fileSize: bookFile.size,
-    fileHash: commonUtils.generateFileHash(bookFile),
+    const newBook = new this.booksModel({
+      ...createBookDto,
+      category: createBookDto.category,
+      filePath,
+      fileType: bookFile.mimetype,
+      fileSize: bookFile.size,
+      fileHash: commonUtils.generateFileHash(bookFile),
+      coverPath,
+      coverType: coverFile?.mimetype || null,
+      coverSize: coverFile?.size || 0,
+    });
 
-    coverPath: normalizedCoverPath, 
-    coverType: coverFile?.mimetype || null,
-    coverSize: coverFile?.size || 0,
-  });
+    const savedBook = await newBook.save();
 
-  const saveBooks = await newBook.save();
-  
-  return {
-    id: saveBooks._id.toString(),
-    title: saveBooks.title,
-    author: saveBooks.author,
-    description: saveBooks.description,
-    category: saveBooks.category,
-    filetype: saveBooks.fileType,
-    createdAt: saveBooks.createdAt,
-    updatedAt: saveBooks.updatedAt,
-    coverPath: saveBooks.coverPath,
-    coverType: saveBooks.coverType,
-  };
-}
+    return {
+      id: savedBook._id.toString(),
+      title: savedBook.title,
+      author: savedBook.author,
+      description: savedBook.description,
+      category: savedBook.category,
+      filetype: savedBook.fileType,
+      createdAt: savedBook.createdAt,
+      updatedAt: savedBook.updatedAt,
+      filePath: savedBook.filePath,
+      coverPath: savedBook.coverPath,
+      coverType: savedBook.coverType,
+    };
+  }
   //retrive all books
   async getAllBooks() {
     const books = await this.booksModel.find();
@@ -92,36 +97,39 @@ async createBook(createBookDto: CreateBookDto, bookFile: Express.Multer.File, co
     }
     return bookDetailResponse;
   }
-  //updateBook
-  async updateBookFile(bookId: string, updateBookDto: updateBookDto, file: Express.Multer.File) {
-    //check if the book found in db
+  //update
+  async updateBookFile(
+    bookId: string,
+    updateBookDto: updateBookDto,
+    file: Express.Multer.File,
+  ) {
     const book = await this.booksModel.findById(bookId);
     if (!book) {
-      throw new BadRequestException("book is not found");
+      throw new BadRequestException('Book is not found');
     }
+
     try {
-      //remove the old file from the storage
-      if (book.filePath && fs.existsSync(book.filePath)) {
-        fs.unlinkSync(book.filePath);
-      }
-      //hash the new file
-      const fileHash = commonUtils.generateFileHash(file);
-      if (updateBookDto.title) {
-        book.title = updateBookDto.title
-      }
-      if (updateBookDto.author) {
-        book.author = updateBookDto.author;
-      }
-      if (updateBookDto.description) {
-        book.description = updateBookDto.description;
+      // Delete old file from Cloudinary if it exists
+      if (book.filePath) {
+        const publicId = this.extractPublicId(book.filePath);
+        await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
       }
 
-      book.filePath = file?.path;
-      book.fileSize = file?.size;
-      book.fileType = file?.mimetype;
+      // Upload new file to Cloudinary
+      const filePath = await this.cloudinaryService.uploadFile(file);
+      const fileHash = commonUtils.generateFileHash(file);
+
+      if (updateBookDto.title) book.title = updateBookDto.title;
+      if (updateBookDto.author) book.author = updateBookDto.author;
+      if (updateBookDto.description) book.description = updateBookDto.description;
+
+      book.filePath = filePath;   // Cloudinary URL
+      book.fileSize = file.size;
+      book.fileType = file.mimetype;
       book.fileHash = fileHash;
 
       const updatedBook = await book.save();
+
       const updateBookResponse: BookResponse = {
         id: updatedBook._id.toString(),
         title: updatedBook.title,
@@ -130,37 +138,56 @@ async createBook(createBookDto: CreateBookDto, bookFile: Express.Multer.File, co
         description: updatedBook.description,
         filetype: updatedBook.fileType,
         createdAt: updatedBook.createdAt,
-        updatedAt: updatedBook.updatedAt
-      }
+        updatedAt: updatedBook.updatedAt,
+      };
+
       return updateBookResponse;
-    }
-    catch (error) {
-      throw new BadRequestException("Failed to update the book file");
+    } catch (error) {
+      throw new BadRequestException('Failed to update the book file');
     }
   }
-  //function to delete book
+  //delete
   async deleteBook(bookId: string) {
     const book = await this.booksModel.findById(bookId);
     if (!book) {
-      throw new BadRequestException("book is not found");
+      throw new BadRequestException('Book is not found');
     }
-    //remove the file from storage
-    if (book.filePath && fs.existsSync(book.filePath)) {
-      fs.unlinkSync(book.filePath);
+
+    // Delete book file from Cloudinary
+    if (book.filePath) {
+      const publicId = this.extractPublicId(book.filePath);
+      await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
     }
-    //remove the book from database
+
+    // Delete cover image from Cloudinary
+    if (book.coverPath) {
+      const publicId = this.extractPublicId(book.coverPath);
+      await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+    }
+
     const deletedBook = await this.booksModel.findByIdAndDelete(bookId);
     if (!deletedBook) {
-      throw new BadRequestException("failed to delete the book");
-    } else {
-      return {
-        message: "book deleted successfully"
-      };
+      throw new BadRequestException('Failed to delete the book');
     }
+
+    return { message: 'Book deleted successfully' };
   }
+
+  // Helper: extract Cloudinary public_id from secure_url                                                      
+  private extractPublicId(url: string): string {
+    const parts = url.split('/');
+    const uploadIndex = parts.indexOf('upload');
+    // Skip version segment (v1234567) if present
+    const startIndex = parts[uploadIndex + 1]?.startsWith('v')
+      ? uploadIndex + 2
+      : uploadIndex + 1;
+    const publicIdWithExt = parts.slice(startIndex).join('/');
+    // Remove file extension for raw files
+    return publicIdWithExt.replace(/\.[^/.]+$/, '');
+  }
+
   // Search function with validation
   async searchBook(key: string): Promise<BooksSchema[]> {
-    // ✅ Validation: key must exist and be a non-empty string
     if (!key || typeof key !== 'string' || key.trim().length === 0) {
       throw new BadRequestException('Search key must be a non-empty string');
     }
@@ -185,7 +212,7 @@ async createBook(createBookDto: CreateBookDto, bookFile: Express.Multer.File, co
         filePath: books.filePath,
         fileSize: books.fileSize,
         filetype: books.fileType,
-        coverPath:books.coverPath,
+        coverPath: books.coverPath,
         updatedAt: books.updatedAt,
         readUrl: `http://localhost:3000/books/read/${books._id}`, // dynamic read link
         downloadUrl: `http://localhost:3000/books/download/${books._id}`, // dynamic download link
@@ -199,58 +226,52 @@ async createBook(createBookDto: CreateBookDto, bookFile: Express.Multer.File, co
     if (!book) throw new NotFoundException('Book not found');
     return book;
   }
-async createCategory(categoryDto: CreateCategoryDto) {
-  // 1. Correct the logic: Throw error IF existingCategory is FOUND
-  const existingCategory = await this.categoryModel.findOne({ name: categoryDto.name });
-  
-  if (existingCategory) {
-    throw new BadRequestException("Category already exists");
+  async createCategory(categoryDto: CreateCategoryDto) {
+    const existingCategory = await this.categoryModel.findOne({ name: categoryDto.name });
+
+    if (existingCategory) {
+      throw new BadRequestException("Category already exists");
+    }
+    const savedCategory = await this.categoryModel.create({
+      name: categoryDto.name,
+      description: categoryDto.description
+    });
+    return {
+      id: savedCategory._id.toString(),
+      name: savedCategory.name,
+      description: savedCategory.description
+    };
   }
 
-  // 2. Use .create() for a cleaner approach
-  const savedCategory = await this.categoryModel.create({
-    name: categoryDto.name,
-    description: categoryDto.description
-  });
-
-  // 3. Return the mapped object
-  return {
-    id: savedCategory._id.toString(),
-    name: savedCategory.name,
-    description: savedCategory.description
-  };
-}
-
-  async getAllCategories(){
+  async getAllCategories() {
     const categories = await this.categoryModel.find();
-    //check if categories found 
-    if(!categories || categories.length===0){
+    if (!categories || categories.length === 0) {
       throw new NotFoundException("no categories found");
     }
-    const categoriesResponse:CategoryResponse[] = categories.map((category)=>{
+    const categoriesResponse: CategoryResponse[] = categories.map((category) => {
       return {
-        id:category._id.toString(),
-        name:category.name,
-        description:category.description
+        id: category._id.toString(),
+        name: category.name,
+        description: category.description
       }
     });
     return categoriesResponse;
   }
- async findTopSix() {
-  const books = await this.booksModel.find().select('+coverPath').limit(6).exec();
-     console.log()
-  return books.map((book) => ({
-     message:"urlis", url:book.coverPath,
-    id: book._id.toString(),
-    title: book.title,
-    author: book.author,
-    description: book.description,
-    category: book.category,
-    coverPath:book.coverPath, 
-    readUrl: `http://localhost:3000/books/read/${book._id}`,
-    downloadUrl: `http://localhost:3000/books/download/${book._id}`,
-  }));
-}
+  async findTopSix() {
+    const books = await this.booksModel.find().select('+coverPath').limit(6).exec();
+    console.log()
+    return books.map((book) => ({
+      message: "urlis", url: book.coverPath,
+      id: book._id.toString(),
+      title: book.title,
+      author: book.author,
+      description: book.description,
+      category: book.category,
+      coverPath: book.coverPath,
+      readUrl: `http://localhost:3000/books/read/${book._id}`,
+      downloadUrl: `http://localhost:3000/books/download/${book._id}`,
+    }));
+  }
   async findOne(id: string): Promise<BooksSchema> {
     const book = await this.booksModel.findById(id).exec();
     if (!book) throw new NotFoundException('Book not found');

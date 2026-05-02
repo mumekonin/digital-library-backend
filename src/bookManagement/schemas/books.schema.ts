@@ -4,14 +4,14 @@ import { Types } from "mongoose";
 @Schema({ timestamps: true })
 export class BooksSchema {
   @Prop()
-  title: string;
+  title!: string;
   @Prop()
-  author: string;
+  author!: string;
   @Prop()
-  description: string;
+  description!: string;
 
   @Prop() // reference Category
-  category:string;
+  category!:string;
 
   // where the file is stored
   @Prop()
@@ -42,9 +42,9 @@ export const bookSchema = SchemaFactory.createForClass(BooksSchema);
 @Schema({ timestamps: true }) // This automatically handles createdAt and updatedAt
 export class CategorySchema{
   @Prop({ required: true, unique: true, trim: true })
-  name: string;
+  name!: string;
 
   @Prop({ required: true })
-  description: string;
+  description!: string;
 }
 export const categorySchema = SchemaFactory.createForClass(CategorySchema);

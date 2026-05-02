@@ -6,6 +6,7 @@ import { BooksController } from "./controllers/books.controller";
 import { commonUtils } from "src/commons/utils";
 import { UsersSchema,userSchema } from "src/users/schema/users.schema";
 import { DbRolesGuard } from "src/commons/guards/roles.guard";
+import { CloudinaryService } from "src/cloudinary/cloudinary.service";
 
 @Module({ 
   imports:[ MongooseModule.forFeature([
@@ -14,6 +15,6 @@ import { DbRolesGuard } from "src/commons/guards/roles.guard";
       {name:UsersSchema.name,schema:userSchema}  
     ])],
   controllers: [BooksController],
-  providers: [BooksService,commonUtils,DbRolesGuard],
+  providers: [BooksService,commonUtils,DbRolesGuard,CloudinaryService],
 })
 export class BookManagementModule {}
