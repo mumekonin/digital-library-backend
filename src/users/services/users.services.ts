@@ -338,7 +338,7 @@ export class UserService {
     await this.reportService.registorReports(userID, action);
     return { message: 'user logged out successfully' };
   }
-async forgotPassword(email: string) {
+  async forgotPassword(email: string) {
     const user = await this.userModule.findOne({
       email: email.toLowerCase(),
     });
@@ -347,19 +347,19 @@ async forgotPassword(email: string) {
       return { message: 'If that email exists, a reset link has been sent.' };
     }
 
-    const token  = randomBytes(32).toString('hex');
+    const token = randomBytes(32).toString('hex');
     const expiry = new Date(Date.now() + 60 * 60 * 1000);
 
     await this.userModule.findByIdAndUpdate(user._id, {
-      resetToken:       token,
+      resetToken: token,
       resetTokenExpiry: expiry,
     });
 
     const frontendUrl = this.configService.get<string>('FRONTEND_URL');
-    const resetUrl    = `${frontendUrl}/reset-password.html?token=${token}`;
+    const resetUrl = `${frontendUrl}/reset-password.html?token=${token}`;
 
     await this.mailerService.sendMail({
-      to:      user.email,
+      to: user.email,
       subject: 'E-Library — Reset Your Password',
       html: `
         <div style="font-family:sans-serif;max-width:520px;margin:auto;padding:20px">
@@ -387,7 +387,7 @@ async forgotPassword(email: string) {
 
   async resetPassword(token: string, newPassword: string) {
     const user = await this.userModule.findOne({
-      resetToken:       token,
+      resetToken: token,
       resetTokenExpiry: { $gt: new Date() },
     });
 
@@ -398,8 +398,8 @@ async forgotPassword(email: string) {
     const hashed = await bcrypt.hash(newPassword, 10);
 
     await this.userModule.findByIdAndUpdate(user._id, {
-      password:         hashed,
-      resetToken:       null,
+      password: hashed,
+      resetToken: null,
       resetTokenExpiry: null,
     });
 
