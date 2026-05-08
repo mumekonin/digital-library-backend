@@ -139,6 +139,14 @@ export class BooksController {
     const result = await this.booksService.createCategory(createCategoryDto);
     return result;
   }
+
+  @Delete("delete-category/:id")
+  @UseGuards(AuthGuard('jwt'), DbRolesGuard)
+  @Roles(Role.LIBRARIAN)
+  async deleteCategory(@Param('id') id:string){
+    const result = await this.booksService.deleteCategory(id);
+    return result;
+  }
   @Get('get-all-categories')
   async getAllCategories() {
     const result = await this.booksService.getAllCategories();

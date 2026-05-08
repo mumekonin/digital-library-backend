@@ -10,10 +10,9 @@ export class BooksSchema {
   @Prop()
   description!: string;
 
-  @Prop() // reference Category
+  @Prop() 
   category!:string;
 
-  // where the file is stored
   @Prop()
   filePath?: string;
   @Prop()

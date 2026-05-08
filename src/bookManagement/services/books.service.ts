@@ -187,39 +187,40 @@ export class BooksService {
   }
 
   // Search function with validation
-  async searchBook(key: string): Promise<BooksSchema[]> {
-    if (!key || typeof key !== 'string' || key.trim().length === 0) {
-      throw new BadRequestException('Search key must be a non-empty string');
-    }
-    key = key.trim();
-    const books = await this.booksModel.find({
-      $or: [
-        { title: { $regex: key, $options: 'i' } },
-        { author: { $regex: key, $options: 'i' } },
-        { originalFileName: { $regex: key, $options: 'i' } },
-      ],
-    });
-    if (!books || books.length === 0) {
-      throw new NotFoundException('No books found for this key');
-    }
-    const booksResponse: BookResponse[] = books.map((books) => {
-      return {
-        id: books._id.toString(),
-        title: books.title,
-        author: books.author,
-        description: books.description,
-        category: books.category,
-        filePath: books.filePath,
-        fileSize: books.fileSize,
-        filetype: books.fileType,
-        coverPath: books.coverPath,
-        updatedAt: books.updatedAt,
-        readUrl: `http://localhost:3000/books/read/${books._id}`, // dynamic read link
-        downloadUrl: `http://localhost:3000/books/download/${books._id}`, // dynamic download link
-      };
-    });
-    return booksResponse;
+ async searchBook(key: string): Promise<BookResponse[]> {
+  if (!key || typeof key !== 'string' || key.trim().length === 0) {
+    throw new BadRequestException('Search key must be a non-empty string');
   }
+  key = key.trim();
+
+  const books = await this.booksModel.find({
+    $or: [
+      { title: { $regex: key, $options: 'i' } },
+      { author: { $regex: key, $options: 'i' } },
+      { originalFileName: { $regex: key, $options: 'i' } },
+      { category: { $regex: key, $options: 'i' } }, // ✅ now defined
+    ],
+  });
+
+  if (!books || books.length === 0) {
+    throw new NotFoundException('No books found for this key');
+  }
+
+  return books.map((book) => ({
+    id: book._id.toString(),
+    title: book.title,
+    author: book.author,
+    description: book.description,
+    category: book.category,
+    filePath: book.filePath,
+    fileSize: book.fileSize,
+    filetype: book.fileType,
+    coverPath: book.coverPath,
+    updatedAt: book.updatedAt,
+    readUrl: `http://localhost:3000/books/read/${book._id}`,
+    downloadUrl: `http://localhost:3000/books/download/${book._id}`,
+  }));
+}
   //get book by id
   async getBookById(id: string) {
     const book = await this.booksModel.findById(id);
@@ -241,6 +242,18 @@ export class BooksService {
       name: savedCategory.name,
       description: savedCategory.description
     };
+  }
+  async deleteCategory(categoryId: string) {
+    const category = await this.categoryModel.findById(categoryId);
+    if (!category) {
+      throw new NotFoundException("category not found");
+    }
+    const booksWithCategory = await this.booksModel.find({ category: category.name });
+    if (booksWithCategory.length > 0) {
+      throw new BadRequestException("cannot delete category with associated books");
+    }
+    await this.categoryModel.findByIdAndDelete(categoryId);
+    return { message: "category deleted successfully" };
   }
 
   async getAllCategories() {
