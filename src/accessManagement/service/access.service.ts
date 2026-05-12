@@ -217,4 +217,27 @@ export class BookCatalogService {
       }
     };
   }
+  async getAllBooks(){
+    const books = await this.bookCatalogModel.find();
+    if(!books || books.length===0){
+      throw new NotFoundException('no books found with this catalog');
+    }
+
+       const booksResponse: BookCatalogResponse[] = books.map((books) => {
+      return {
+        id: books._id.toString(),
+        title: books.title,
+        author: books.author,
+        category: books.category,
+        floorNumber: books.floorNumber,
+        section: books.section,
+        shelfNumber: books.shelfNumber,
+        totalCopies: books.totalCopies,
+        availableCopies: books.availableCopies,
+        borrowUrl: `http://localhost:3000/book-catalog/borrow-book/${books._id}`,
+      }
+    });
+    return booksResponse;
+
+  }
 }

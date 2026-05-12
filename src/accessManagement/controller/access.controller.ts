@@ -74,4 +74,9 @@ export class BookCatalogController {
   async getAllLoans() {
     return this.bookCatalogService.findAllActiveLoans();
   }
+  @Get('all-books')
+  async getAllBooks(){
+    const result = await this.bookCatalogService.getAllBooks();
+    return result;
+  }
 }

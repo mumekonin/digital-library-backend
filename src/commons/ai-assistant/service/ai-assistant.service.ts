@@ -96,7 +96,6 @@ export class AiAssistantService {
       throw new BadRequestException('Message content cannot be empty.');
     }
 
-    // Use override prompt from frontend if provided, else use built-in
     const systemPrompt = overridePrompt?.trim() || SYSTEM_PROMPTS[language] || SYSTEM_PROMPTS.en;
 
     this.logger.log(`Chat — ${messages.length} msg(s) — lang: ${language}`);
@@ -130,7 +129,7 @@ export class AiAssistantService {
         language,
       };
 
-    } catch (err) {
+    } catch (err: any) { 
       if (
         err instanceof BadRequestException        ||
         err instanceof ServiceUnavailableException ||
