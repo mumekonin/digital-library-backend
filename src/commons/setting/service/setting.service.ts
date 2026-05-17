@@ -9,7 +9,7 @@ export class SettingService {
     @InjectModel(SettingsSchema.name)
     private readonly settingsModel: Model<SettingsSchema>,
   ) {}
-
+//function to get settings, if not exist create one and return it
   async getSettings() {
     let settings = await this.settingsModel.findOne({ slug: 'system_config' }).exec();
     if (!settings) {
@@ -17,7 +17,7 @@ export class SettingService {
     }
     return settings;
   }
-
+//function to update settings, if not exist create one and return it
   async updateSettings(data: Partial<SettingsSchema>) {
     return this.settingsModel.findOneAndUpdate(
       { slug: 'system_config' },
