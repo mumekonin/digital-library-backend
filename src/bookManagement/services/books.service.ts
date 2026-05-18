@@ -217,8 +217,11 @@ export class BooksService {
     filetype: book.fileType,
     coverPath: book.coverPath,
     updatedAt: book.updatedAt,
-    readUrl: `http://localhost:3000/books/read/${book._id}`,
-    downloadUrl: `http://localhost:3000/books/download/${book._id}`,
+    
+    // readUrl: `http://localhost:3000/books/read/${book._id}`,
+    // downloadUrl: `http://localhost:3000/books/download/${book._id}`,
+    readUrl: `https://digital-library-backend-p5ga.onrender.com/books/read/${book._id}`,
+    downloadUrl: `https://digital-library-backend-p5ga.onrender.com/books/download/${book._id}`,
   }));
 }
   //get book by id
@@ -281,8 +284,8 @@ export class BooksService {
       description: book.description,
       category: book.category,
       coverPath: book.coverPath,
-      readUrl: `http://localhost:3000/books/read/${book._id}`,
-      downloadUrl: `http://localhost:3000/books/download/${book._id}`,
+      readUrl: `https://digital-library-backend-p5ga.onrender.com/books/read/${book._id}`,
+      downloadUrl: `https://digital-library-backend-p5ga.onrender.com/books/download/${book._id}`,
     }));
   }
   async findOne(id: string): Promise<BooksSchema> {
