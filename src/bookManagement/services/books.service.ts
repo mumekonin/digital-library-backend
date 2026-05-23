@@ -218,10 +218,10 @@ export class BooksService {
     coverPath: book.coverPath,
     updatedAt: book.updatedAt,
     
-    // readUrl: `http://localhost:3000/books/read/${book._id}`,
-    // downloadUrl: `http://localhost:3000/books/download/${book._id}`,
-    readUrl: `https://digital-library-backend-p5ga.onrender.com/books/read/${book._id}`,
-    downloadUrl: `https://digital-library-backend-p5ga.onrender.com/books/download/${book._id}`,
+    readUrl: `http://localhost:3000/books/read/${book._id}`,
+    downloadUrl: `http://localhost:3000/books/download/${book._id}`,
+    // readUrl: `https://digital-library-backend-p5ga.onrender.com/books/read/${book._id}`,
+    // downloadUrl: `https://digital-library-backend-p5ga.onrender.com/books/download/${book._id}`,
   }));
 }
   //get book by id

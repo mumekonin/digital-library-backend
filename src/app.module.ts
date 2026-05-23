@@ -16,7 +16,8 @@ import { SettingsModule } from './commons/setting/setting.module';
 import { AiAssistantModule } from './commons/ai-assistant/ai-assistant.module';
 import { CloudinaryModule } from '@scwar/nestjs-cloudinary';
 import dns from 'dns';
-dns.setServers(["8.8.8.8","1.1.1.1"]);
+dns.setServers(['8.8.8.8', '1.1.1.1']);
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -40,12 +41,15 @@ dns.setServers(["8.8.8.8","1.1.1.1"]);
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         transport: {
-          host:   config.get<string>('MAIL_HOST'),
-          port:   465,
-          secure: true,
+          host:   config.get<string>('MAIL_HOST'),  // smtp.gmail.com
+          port:   587,    // ✅ changed from 465 → 587 (STARTTLS, works with Gmail App Passwords)
+          secure: false,  // ✅ changed from true → false (true is only for port 465/SSL)
           auth: {
             user: config.get<string>('MAIL_USER'),
             pass: config.get<string>('MAIL_PASS'),
+          },
+          tls: {
+            rejectUnauthorized: false, // ✅ prevents TLS cert errors on some servers
           },
         },
         defaults: {
