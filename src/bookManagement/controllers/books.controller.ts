@@ -162,4 +162,8 @@ export class BooksController {
     const book = await this.booksService.findOne(id);
     return res.download(`./uploads/${book.filePath}`);
   }
+  @Get('new-arrivals')
+  async getNewArrivals() {
+    return await this.booksService.getNewArrivals();
+  }
 }

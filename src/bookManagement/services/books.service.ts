@@ -293,4 +293,28 @@ export class BooksService {
     if (!book) throw new NotFoundException('Book not found');
     return book;
   }
+
+  async getNewArrivals() {
+    const books = await this.booksModel.find();
+    if (!books || books.length === 0) {
+      throw new BadRequestException("no book is found");
+    }
+    const booksResponse: BookResponse[] = books.map((books) => {
+      return {
+        id: books._id.toString(),
+        title: books.title,
+        author: books.author,
+        category: books.category,
+        coverPath: books.coverPath,          
+        fileSize: books.fileSize, 
+        description: books.description,
+        filetype: books.fileType,
+        createdAt: books.createdAt,
+        updatedAt: books.updatedAt,
+        readUrl: `https://digital-library-backend-p5ga.onrender.com/books/read/${books._id}`,
+        downloadUrl: `https://digital-library-backend-p5ga.onrender.com/books/download/${books._id}`,
+      }
+    });
+    return booksResponse
+  }
 }
